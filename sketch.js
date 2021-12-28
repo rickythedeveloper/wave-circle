@@ -2,21 +2,21 @@
 let canvas
 const fps = 60
 const pointFPS = 60
+const width = 2000
+const height = width //width * Math.sqrt(2)
+let iteration = 0
+const numIterations = 10
 
 const sketch = (p) => {
 	const waves = []
 	let numPaths
 	let completionTime
-
-	p.preload = () => { }
+	let strokeColor
 
 	p.setup = () => {
-		// capturer = new CCapture({ format: 'gif', workersPath: 'js/' })
-		canvas = p.createCanvas(p.windowWidth, p.windowHeight)
-		p.stroke(255, 0, 0)
-		p.circle(p.width / 2, p.height / 2, 10, 10)
-		// p.stroke(0)
-		// p.strokeWeight(0.5)
+		canvas = p.createCanvas(width, height)
+		// p.stroke(255, 0, 0)
+		// p.circle(p.width / 2, p.height / 2, 10, 10)
 
 		let infoString = ''
 		const numWaves = p.floor(p.random(2, 6))
@@ -35,44 +35,65 @@ const sketch = (p) => {
 		infoString += `number of paths: ${numPaths}`
 		// document.getElementById('info').innerText = infoString
 
-		const minSpeed = Math.min(...waves.map(wave => Math.abs(wave.angularSpeed)))
-		completionTime = p.TWO_PI / minSpeed
-	}
+		const speeds = waves.map(wave => Math.abs(wave.angularSpeed))
+		completionTime = p.TWO_PI / greatestCommonDivisor(...speeds)
 
-	p.draw = () => {
-		let newTime = p.frameCount / fps
-		if (newTime <= completionTime) {
-			p.stroke(0)
-			p.strokeWeight(0.5)
-		} else if (newTime <= 2 * completionTime) {
-			p.stroke(255)
-			p.strokeWeight(1.5)
-			newTime -= completionTime
-		} else {
-			onFinish()
-			p.noLoop()
-		}
+		const maxPossibleSize = sum(...waves.map(w => w.radius)) * 2
+		const scale = p.width / maxPossibleSize
 
+		p.strokeWeight(p.width / 1000 / scale)
 		p.translate(p.width / 2, p.height / 2)
-		for (let angleOffset = 0; angleOffset < 2 * Math.PI; angleOffset += 2 * Math.PI / numPaths) {
-			// if (angleOffset !== 0) continue
-			for (let t = newTime - 1 / fps; t < newTime; t += 1 / pointFPS) {
+		p.scale(scale)
+		p.colorMode(p.HSB)
+		strokeColor = [0, 100, 70]
+		const nTimes = pointFPS * completionTime
+		const colorChange = 2 * 360 / nTimes
+		for (let t = 0; t < completionTime; t += 1 / pointFPS) {
+			strokeColor[0] += t < completionTime / 2 ? colorChange : -colorChange
+			p.stroke(...strokeColor)
+			for (let angleOffset = 0; angleOffset < 2 * Math.PI; angleOffset += 2 * Math.PI / numPaths) {
 				const currentPosition = getPosition(t, waves, angleOffset)
 				const newPosition = getPosition(t + 1 / pointFPS, waves, angleOffset)
-
 				p.line(...currentPosition, ...newPosition)
 			}
 		}
 
-		// if (p.frameCount === 1) capturer.start()
-		// capturer.capture(canvas.elt)
-
-		// if (frameCount === 60 * 5) {
-		// 	capturer.stop()
-		// 	capturer.save()
-		// 	p.noLoop()
-		// }
+		p.noLoop()
+		p.saveCanvas(`spirography`, 'png')
+		setTimeout(() => {
+			const textSize = p.width / scale / 5.5
+			p.rectMode(p.CENTER)
+			p.textSize(textSize)
+			p.noStroke()
+			p.colorMode(p.RGB)
+			p.fill(120, 100)
+			p.textAlign(p.CENTER)
+			p.text("Watermark", 0, 0, p.width / scale, textSize)
+			p.saveCanvas(`spirography_display`, 'png')
+			setTimeout(() => {
+				onFinish()
+			}, 1000)
+		}, 1000)
 	}
+}
+
+const greatestCommonDivisor = (...numbers) => {
+	if (numbers.length < 2) throw new Error('gcd needs two numbers or more')
+	if (numbers.length === 2) return greatestCommonDivisor_2(...numbers)
+	return greatestCommonDivisor(
+		greatestCommonDivisor_2(numbers[0], numbers[1]),
+		...numbers.slice(2)
+	)
+}
+const greatestCommonDivisor_2 = function (a, b) {
+	if (!b) return a
+	return greatestCommonDivisor_2(b, a % b);
+}
+
+const sum = (...numbers) => {
+	let val = 0
+	for (let i = 0; i < numbers.length; i++) val += numbers[i]
+	return val
 }
 
 const getPosition = (t, waves, angleOffset) => {
@@ -91,5 +112,8 @@ let myp5 = new p5(sketch, sketchDiv)
 
 const onFinish = () => {
 	myp5.remove()
-	myp5 = new p5(sketch, sketchDiv)
+	iteration += 1
+	if (iteration < numIterations) {
+		myp5 = new p5(sketch, sketchDiv)
+	}
 }
